@@ -1,0 +1,6 @@
+[user]
+  name = Marsuves Vex
+  email = MarsuvesVex@TwitchTV
+
+[core]
+  sshCommand = ssh -i ~/.ssh/MarsuvesVex_ed2551
