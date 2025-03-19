@@ -1,0 +1,524 @@
+version: "3.9"
+services:
+  step-ca:
+    image: smallstep/step-ca
+    restart: always
+    environment:
+      DOCKER_STEPCA_INIT_NAME: Smallstep
+      DOCKER_STEPCA_INIT_DNS_NAMES: ca.dev.local,dev.local,local
+      DOCKER_STEPCA_INIT_PROVISIONER_NAME: admin
+      DOCKER_STEPCA_INIT_PASSWORD: pass123
+    networks:
+      static-network:
+        aliases:
+          - "ca.dev.local"
+      traf-external:
+        aliases:
+          - "ca.dev.local"
+    dns:
+      - 11.100.100.10
+    extra_hosts:
+      - "*.dev.local:11.100.100.10"
+    expose:
+      - 9000
+    ports:
+      - 9000:9000
+    volumes:
+      - ./data/step-ca:/home/step
+    labels:
+      - "traefik.enable=true"
+      - 'traefik.docker.network=traf-external'
+      - "traefik.http.routers.ca-web.entrypoints=web"
+      - "traefik.http.routers.ca-web.rule=Host(`ca.dev.local`)"
+
+      - "traefik.http.middlewares.ca-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.ca-web.middlewares=ca-redirect"
+
+      - "traefik.http.routers.ca-websecure.entrypoints=websecure"
+      - "traefik.http.routers.ca-websecure.rule=Host(`ca.dev.local`)"
+      - "traefik.http.services.ca.loadbalancer.server.port=9000"
+      - "traefik.http.routers.ca-websecure.tls=true"
+      - "traefik.http.routers.ca-websecure.tls.certresolver=myresolver"
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  # Start the agent with the latest version
+  # hub-agent:
+  #   image: ghcr.io/traefik/hub-agent-traefik:experimental
+  #   # pull_policy: always
+  #   container_name: hub-agent
+  #   dns:
+  #     - 1.1.1.1
+  #     - 1.0.0.1
+  #     - 8.8.8.8
+  #   command:
+  #     - run
+      # - --hub.token=1c8b7e7b-b326-4913-b1b1-d8dc421af015
+  #     - --auth-server.advertise-url=http://hub-agent
+  #     - --traefik.host=traefik
+  #     - --traefik.tls.insecure=true
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   depends_on:
+  #     - traefik
+  traefik:
+    image: traefik:v2.4
+    restart: always
+    depends_on:
+      - step-ca
+    networks:
+      static-network:
+        ipv4_address: 11.100.100.10
+      traf-external:
+        aliases:
+          - "traefik"
+          - "traefik.dev.local"
+          - "whoami.dev.local"
+          - "portainer.dev.local"
+          - "files.dev.local"
+          - "sonnar.dev.local"
+          - "auth.dev.local"
+          - "test.dev.local"
+          - "postiz.dev.local"
+          - "postiz.dev"
+          - "briefkasten.dev.local"
+          - "bedb.dev.local"
+          - "links.dev.local"
+          - "mse.dev.local"
+          - "tunepledge.dev.local"
+          - "marsuves.wiki.dev.local"
+          - "learndash.dev.local"
+          - "learndashdb.dev.local"
+          - "ggsa.dev.local"
+          - "ggsadb.dev.local"
+          - "opendb.dev.local"
+          - "posteio.dev.local"
+          - "mail.dev.local"
+          - "ghost.dev.local"
+          - "api.dev.local"
+          - "ironui.dev.local"
+          - "sc.dev.local"
+          - "msedb.dev.local"
+          - "stock.dev.local"
+          - "dr.dev.local"
+          - "drdb.dev.local"
+          - "msv.dev.local"
+          - "msfm.dev.local"
+          - "commento.dev.local"
+          - "msfmdb.dev.local"
+          - "msfdb.dev.local"
+          # - "ca.dev.local"
+          - "db.dev.local"
+          - "wiki.dev.local"
+          - "te.dev.local"
+          - "tedb.dev.local"
+          - "heimdall.dev.local"
+          - "dashy.dev.local"
+          - "organizr.dev.local"
+          - "bookstack.dev.local"
+          - "excalidraw.dev.local"
+          - "mailhog.dev.local"
+          - "admin-ldap.dev.local"
+          - "myvault.dev.local"
+          - "keycloak.dev.local"
+          - "jellyfinn.dev.local"
+          - "vault.dev.local"
+          - "ninja.dev.local"
+
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traf-external"
+      - "--providers.file.watch=true"
+      - "--accesslog=false"
+      - "--log=true"
+      - "--log.level=DEBUG"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesResolvers.myresolver.acme.tlsChallenge=true"
+      - "--certificatesResolvers.myresolver.acme.email=admin"
+      - "--certificatesResolvers.myresolver.acme.storage=/etc/acme/acme.json"
+      - "--certificatesresolvers.myresolver.acme.caserver=https://ca.dev.local:9000/acme/acme/directory"
+      - "--certificatesResolvers.myresolver.acme.httpChallenge=true"
+      - "--certificatesResolvers.myresolver.acme.httpChallenge.entryPoint=websecure"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # - ./data/traefik/acme:/etc/acme
+      - ./data/step-ca/certs/root_ca.crt:/usr/local/share/ca-certificates/my_root_ca.crt
+      - ./site_home_local.crt:/certs/wild_dev_local.crt:ro
+      - ./site_home_local.key:/certs/wild_dev_local.key:ro
+      - ./ca.crt:/certs/ca.crt
+      - ./traefik_config/traefik.yml:/traefik.yml:ro
+      - ./traefik_config/log/access.log:/log/access.log
+      - ./traefik_config/acme/acme.json:/etc/acme/acme.json
+      - ./traefik_config/configurations:/configurations
+    environment:
+      LEGO_CA_CERTIFICATES: "/usr/local/share/ca-certificates/my_root_ca.crt"
+      LEGO_CA_SERVER_NAME: "ca.dev.local"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik0.entrypoints=web"
+      - "traefik.http.routers.traefik0.rule=Host(`traefik.dev.local`)"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+      - "traefik.http.middlewares.traefik-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.traefik0.middlewares=traefik-redirect"
+
+      - "traefik.http.routers.traefik1.entrypoints=websecure"
+      - "traefik.http.routers.traefik1.rule=Host(`traefik.dev.local`)"
+      - "traefik.http.routers.traefik1.tls=true"
+      - "traefik.http.routers.traefik1.tls.certresolver=myresolver"
+
+  whoami:
+    image: containous/whoami:latest
+    hostname: "whoami1"
+    networks:
+      - traf-external
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami0.entrypoints=web"
+      - "traefik.http.routers.whoami0.rule=Host(`whoami.dev.local`)"
+
+      - "traefik.http.middlewares.whoami-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.whoami0.middlewares=whoami-redirect"
+
+      - "traefik.http.routers.whoami1.entrypoints=websecure"
+      - "traefik.http.routers.whoami1.rule=Host(`whoami.dev.local`)"
+      - "traefik.http.routers.whoami1.tls=true"
+      - "traefik.http.routers.whoami1.tls.certresolver=myresolver"
+
+  portainer:
+    image: portainer/portainer-ee:latest
+    command: -H unix:///var/run/docker.sock
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+      - ./docker/portainer/data:/data
+    ports:
+      - 9001:9000
+    networks:
+      traf-external:
+        aliases:
+          - "portainer.dev.local"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer-web.entrypoints=web"
+      - "traefik.http.routers.portainer-web.rule=Host(`portainer.dev.local`)"
+
+      - "traefik.http.middlewares.portainer-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.portainer-web.middlewares=portainer-redirect"
+
+      - "traefik.http.routers.portainer-websecure.entrypoints=websecure"
+      - "traefik.http.routers.portainer-websecure.rule=Host(`portainer.dev.local`)"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+      - "traefik.http.routers.portainer-websecure.tls=true"
+      - "traefik.http.routers.portainer-websecure.tls.certresolver=myresolver"
+
+
+####DB for Authelia
+  mariadb:
+    container_name: authelia_mariadb
+    image: mariadb:$MARIAVERSION
+    hostname: authelia_mariadb
+    restart: always
+    networks:
+      - traf-external
+    volumes:
+      - ./docker/mariadb/config:/config
+      - ./docker/mariadb/mysql:/var/lib/mysql
+    expose:
+      - 3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=$AUTHELIA_MYSQL_ROOT_PASSWORD
+      - MYSQL_USER=$AUTHELIA_MYSQL_USER
+      - MYSQL_DATABASE=$AUTHELIA_MYSQL_DATABASE
+      - MYSQL_PASSWORD=$AUTHELIA_MYSQL_PASSWORD
+    labels:
+      - traefik.enable=false
+####GUI managament for mariadb
+  phpmyadmin:
+    container_name: authelia_phpmyadmin
+    image: phpmyadmin/phpmyadmin:$PHPMYADMINVERSION
+    depends_on:
+      - mariadb
+    # restart: always
+    # expose:
+    #   - 80
+    networks:
+      - traf-external
+    environment:
+      PMA_HOSTS: authelia_mariadb
+      UPLOAD_LIMIT: 1G
+      PMA_ARBITRARY: 1
+      PMA_DB_ENGINE: mysql
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      PMA_USER: $AUTHELIA_MYSQL_USER
+      PMA_PASSWORD: $AUTHELIA_MYSQL_PASSWORD
+      MYSQL_ROOT_PASSWORD: $AUTHELIA_MYSQL_ROOT_PASSWORD
+    labels:
+      - traefik.enable=true
+      ## Routers Rules
+      - traefik.http.routers.phpmyadmin-http-rtr.rule=Host(`db.$DOMAINNAME`)
+      - traefik.http.routers.phpmyadmin-http-rtr.entrypoints=web
+      - traefik.http.routers.phpmyadmin-https-rtr.rule=Host(`db.$DOMAINNAME`)
+      - traefik.http.routers.phpmyadmin-https-rtr.entrypoints=websecure
+      - traefik.http.routers.phpmyadmin-https-rtr.tls=true
+      - traefik.http.routers.phpmyadmin-https-rtr.tls.certresolver=myresolver
+      ## Middlewares Rules
+      - traefik.http.routers.phpmyadmin-http-rtr.middlewares=middlewares-https-redirect@file
+      - traefik.http.routers.phpmyadmin-https-rtr.middlewares=chain-authelia@file
+####redis Cache for authelia
+  redis:
+    container_name: authelia_redis
+    image: redis:alpine
+    restart: always
+    volumes:
+      - ./docker/redis:/data
+    networks:
+      - traf-external
+    expose:
+      - 6379
+    environment:
+      - TZ=$TZ
+    labels:
+      - traefik.enable=false
+####Authelia (Lite) - Self-Hosted Single Sign-On and Two-Factor Authentication
+  authelia:
+    container_name: authelia
+    image: authelia/authelia:$AUTHELIAVERSION
+    restart: always
+    depends_on:
+      - mariadb
+      - phpmyadmin
+      - redis
+    ports:
+      - 9091:9091
+    expose:
+      - 9091
+    environment:
+      - TZ=$TZ
+      - AUTHELIA_THEME=dark
+    volumes:
+      - ./docker/authelia/authelia:/var/lib/authelia
+      - ./docker/authelia/configuration.yml:/etc/authelia/configuration.yml:ro
+      - ./docker/authelia/users_database.yml:/etc/authelia/users_database.yml
+    networks:
+      - traf-external
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.authelia.rule=Host(`auth.$DOMAINNAME`)
+      - traefik.http.routers.authelia.entrypoints=web,websecure
+      - traefik.http.routers.authelia.tls=true
+      - traefik.http.routers.authelia.tls.certresolver=myresolver
+####Dozzle is a simple, a web based interface to monitor your Docker container logs
+  dozzle:
+    container_name: dozzle_logs
+    image: amir20/dozzle:$DOZZLEVERSION
+    restart: always
+    networks:
+      - traf-external
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 9999:8080
+    labels:
+      - traefik.enable=false
+####Mailhog For Local Testing
+  mailhog:
+    container_name: mailhog
+    restart: always
+    image: mailhog/mailhog:latest
+    expose:
+      - 8025
+      - 1025
+    networks:
+      traf-external:
+        aliases:
+          - "mailhog.dev.local"
+      mailhog:
+        aliases:
+          - "mailhog"
+          - "mailhog.dev.local"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mailhog.rule=Host(`mailhog.$DOMAINNAME`)
+      - traefik.http.routers.mailhog.entrypoints=web
+      - traefik.http.routers.mailhog-secure.rule=Host(`mailhog.$DOMAINNAME`)
+      - traefik.http.routers.mailhog-secure.entrypoints=websecure
+      - traefik.http.routers.mailhog-secure.tls=true
+      - traefik.http.routers.mailhog-secure.tls.certresolver=myresolver
+      - traefik.http.services.mailhog-secure.loadbalancer.server.port=8025
+      ## Middlewares Rules
+      - traefik.http.routers.mailhog.middlewares=middlewares-https-redirect@file
+      - traefik.http.routers.mailhog-secure.middlewares=chain-authelia@file
+####whoami test in front page
+  whoami2:
+    container_name: frontpage
+    image: containous/whoami
+    restart: always
+    depends_on:
+      - traefik
+    expose:
+      - 80
+    networks:
+      - traf-external
+    labels:
+      - traefik.enable=true
+      ## Routers Rules
+      - traefik.http.routers.whoami-http-rtr.rule=Host(`test.$DOMAINNAME`)
+      - traefik.http.routers.whoami-http-rtr.entrypoints=web
+      - traefik.http.routers.whoami-https-rtr.rule=Host(`test.$DOMAINNAME`)
+      - traefik.http.routers.whoami-https-rtr.entrypoints=websecure
+      - traefik.http.routers.whoami-https-rtr.tls=true
+      - traefik.http.routers.whoami-https-rtr.tls.certresolver=myresolver
+      ## Middlewares Rules
+      - traefik.http.routers.whoami-http-rtr.middlewares=middlewares-https-redirect@file
+      - traefik.http.routers.whoami-https-rtr.middlewares=chain-authelia@file
+####heimdall app dashboard
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    restart: always
+    container_name: heimdall
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=$TZ
+    depends_on:
+      - traefik
+    networks:
+      traf-external:
+        aliases:
+          - "heimdall.dev.local"
+    labels:
+      - traefik.enable=true
+      ## Routers Rules
+      - traefik.http.routers.heimdall-http.rule=Host(`heimdall.$DOMAINNAME`)
+      - traefik.http.routers.heimdall-http.entrypoints=web
+      - traefik.http.routers.heimdall.rule=Host(`heimdall.$DOMAINNAME`)
+      - traefik.http.routers.heimdall.entrypoints=websecure
+      - traefik.http.routers.heimdall.tls=true
+      - traefik.http.routers.heimdall.tls.certresolver=myresolver
+      - "traefik.http.services.heimdall.loadbalancer.server.port=80"
+      ## Middlewares Rules
+      - traefik.http.routers.heimdall-http.middlewares=middlewares-https-redirect@file
+      - traefik.http.routers.heimdall.middlewares=chain-authelia@file
+    volumes:
+      - ./data/heimdall:/config
+  openldap:
+    image: osixia/openldap:latest
+    container_name: openldap
+    # hostname: #doesn't have to be accesible outside of docker network e.x ldap.example.com
+    volumes:
+      - ./data/ldap/db:/var/lib/ldap
+      - ./data/ldap/conf:/etc/ldap/slapd.d
+    networks:
+      - traf-external
+    expose:
+      - 389
+      - 636
+    restart: always
+    environment:
+      TZ: $TZ
+      LDAP_ORGANISATION: "dev" # Org name
+      LDAP_DOMAIN: "dev.local" # domain.tld
+      LDAP_BASE_DN: "dc=dev,dc=local" # edit domain tld
+      # LDAP_LOG_LEVEL: "-1"
+      # LDAP_ADMIN_PASSWORD: "toor" # password for admin@domain.tld
+      # LDAP_CONFIG_PASSWORD: "toor" # password for config (not sure what this does)
+      # LDAP_TLS_VERIFY_CLIENT: "try"
+      # LDAP_READONLY_USER: "false"
+      # LDAP_READONLY_USER_USERNAME: "readonly"
+      # LDAP_READONLY_USER_PASSWORD: "readonly"
+      # LDAP_RFC2307BIS_SCHEMA: "true"
+      # LDAP_BACKEND: "mdb"
+      # LDAP_REPLICATION: "false"
+      # KEEP_EXISTING_CONFIG: "false"
+      # LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
+        # --detach osixia/phpldapadmin:0.9.0
+  ldap-php:
+    image: osixia/phpldapadmin
+    networks:
+      - traf-external
+    ports:
+      - 8786:80
+    depends_on:
+      - openldap
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: openldap
+      PHPLDAPADMIN_HTTPS: false
+  ldap-user-manager:
+    image: wheelybird/ldap-user-manager:next_release
+    container_name: ldap-user-manager
+    networks:
+      - traf-external
+    ports:
+      - 8785:80
+    restart: always
+    depends_on:
+      - openldap
+    environment:
+      TZ: $TZ
+      SERVER_HOSTNAME: "admin-ldap.dev.local" # url for webui
+      ORGANISATION_NAME: "dev" # Org name
+      LDAP_URI: "ldap://openldap"
+      LDAP_BASE_DN: "dc=dev,dc=local" # edit domain tld same as above
+      LDAP_REQUIRE_STARTTLS: "FALSE"
+      LDAP_ADMINS_GROUP: "admins" # admin group
+      LDAP_ADMIN_BIND_DN: "cn=admin,dc=dev,dc=local" # edit domain tld
+      LDAP_ADMIN_BIND_PWD: "admin" # admin password set above
+      LDAP_DEBUG: "true"
+      # LDAP_USES_NIS_SCHEMA: "false"
+      # LDAP_IGNORE_CERT_ERRORS: "true"
+      # LDAP_REQUIRE_STARTTLS: "false"
+      EMAIL_DOMAIN: "dev.local" # email @this.part.here
+      NO_HTTPS: "true"
+      SMTP_HOSTNAME: "mailhog" # email SMTP
+      SMTP_HOST_PORT: 1025
+      SMTP_USERNAME: "" # email username (usually your email)
+      SMTP_PASSWORD: "" #email password
+      SMTP_USE_TLS: "false"
+      EMAIL_FROM_ADDRESS: "admin@example.com" # your email address
+      REMOTE_HTTP_HEADERS_LOGIN: "TRUE"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.ldapuser.rule=Host(`admin-ldap.$DOMAINNAME`)
+      - traefik.http.routers.ldapuser.entrypoints=web
+      - traefik.http.routers.ldapuser-secure.rule=Host(`admin-ldap.$DOMAINNAME`)
+      - traefik.http.routers.ldapuser-secure.entrypoints=websecure
+      - traefik.http.routers.ldapuser-secure.tls=true
+      - traefik.http.routers.ldapuser-secure.tls.certresolver=myresolver
+      - traefik.http.services.ldapuser-secure.loadbalancer.server.port=80
+      ## Middlewares Rules
+      - traefik.http.routers.ldapuser.middlewares=middlewares-https-redirect@file
+      - traefik.http.routers.ldapuser-secure.middlewares=chain-authelia@file
+
+
+volumes:
+  portainer_data:
+########################### NETWORKS
+# Create proxy network
+# $ docker network create --gateway 192.168.90.1 --subnet 192.168.90.0/24 traf-external
+networks:
+  mailhog:
+    external: true
+    name: mailhog
+  traf-external:
+    external: true
+    name: traf-external
+    # name: traf-external
+  static-network:
+    ipam:
+      config:
+        - subnet: 11.100.100.0/24
+  default:
+    driver: bridge

@@ -1,0 +1,33 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  error-pages:
+    image: tarampampam/error-pages:latest # Using the latest tag is highly discouraged. Please, use tags in X.Y.Z format
+    environment:
+      TEMPLATE_NAME: ghost # set the error pages template
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      # use as "fallback" for any NON-registered services (with priority below normal)
+      - traefik.http.routers.error-pages-router.rule=HostRegexp(`{domain:.+}`)
+      - traefik.http.routers.error-pages-router.priority=10
+      - traefik.http.routers.error-pages-router.entrypoints=web
+      - traefik.http.routers.error-pages-router.middlewares=error-pages-middleware
+      # - traefik.http.routers.error-pages-router.middlewares-https-redirect@file
+
+      - traefik.http.routers.error-pages-secure.rule=HostRegexp(`{domain:.+}`)
+      - traefik.http.routers.error-pages-secure.priority=10
+      - traefik.http.routers.error-pages-secure.entrypoints=websecure
+      - traefik.http.routers.error-pages-secure.tls=true
+      - traefik.http.routers.error-pages-secure.tls.certresolver=myresolver
+      - traefik.http.routers.error-pages-secure.middlewares=error-pages-middleware
+      # "errors" middleware settings
+      - traefik.http.middlewares.error-pages-middleware.errors.status=400-599
+      - traefik.http.middlewares.error-pages-middleware.errors.service=error-pages-service
+      - traefik.http.middlewares.error-pages-middleware.errors.query=/{status}.html
+      # define service properties
+      - traefik.http.services.error-pages-service.loadbalancer.server.port=8080
+networks:
+  default:
+    external: true
+    name: traf-external
